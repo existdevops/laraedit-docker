@@ -19,15 +19,8 @@ RUN apt-get install -y software-properties-common curl build-essential \
 
 # add some repositories
 RUN apt-add-repository ppa:nginx/stable -y && \
-    apt-add-repository ppa:rwky/redis -y && \
     apt-add-repository ppa:ondrej/php -y && \
     apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys 5072E1F5 && \
-    sh -c 'echo "deb http://repo.mysql.com/apt/ubuntu/ trusty mysql-5.7" >> /etc/apt/sources.list.d/mysql.list' && \
-    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
-    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' && \
-    curl -s https://packagecloud.io/gpg.key | apt-key add - && \
-    echo "deb http://packages.blackfire.io/debian any main" | tee /etc/apt/sources.list.d/blackfire.list && \
-    curl --silent --location https://deb.nodesource.com/setup_5.x | bash - && \
     apt-get update
 
 # set the locale
@@ -50,14 +43,14 @@ RUN rm -rf /etc/nginx/sites-available/default && \
     usermod -u 1000 www-data && \
     chown -Rf www-data.www-data /var/www/html/ && \
     sed -i -e"s/worker_processes  1/worker_processes 5/" /etc/nginx/nginx.conf
-VOLUME ["/var/www/html/app"]
+
 VOLUME ["/var/cache/nginx"]
 VOLUME ["/var/log/nginx"]
 
 # install php
 RUN apt-get install -y --force-yes php7.0-fpm php7.0-cli php7.0-dev php7.0-pgsql php7.0-sqlite3 php7.0-gd \
     php-apcu php7.0-curl php7.0-mcrypt php7.0-imap php7.0-mysql php7.0-readline php-xdebug php-common \
-    php7.0-mbstring php7.0-xml php7.0-zip
+    php7.0-mbstring php7.0-xml php7.0-zip php7.0-json php7.0-bcmath php7.0-intl php7.0-soap php7.0-igbinary php7.0-opcache
 RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/7.0/cli/php.ini && \
     sed -i "s/display_errors = .*/display_errors = On/" /etc/php/7.0/cli/php.ini && \
     sed -i "s/;date.timezone.*/date.timezone = UTC/" /etc/php/7.0/cli/php.ini && \
@@ -80,48 +73,16 @@ COPY fastcgi_params /etc/nginx/
 RUN phpenmod mcrypt && \
     mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php
 
-# install sqlite 
-RUN apt-get install -y sqlite3 libsqlite3-dev
-
-# install mysql 
-RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections;\
-    echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections;\
-    apt-get install -y mysql-server && \
-    echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
-    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf
-RUN /usr/sbin/mysqld & \
-    sleep 10s && \
-    echo "GRANT ALL ON *.* TO root@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; CREATE USER 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret'; GRANT ALL ON *.* TO 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; GRANT ALL ON *.* TO 'homestead'@'%' IDENTIFIED BY 'secret' WITH GRANT OPTION; FLUSH PRIVILEGES; CREATE DATABASE homestead;" | mysql
-VOLUME ["/var/lib/mysql"]
-
 # install composer
 RUN curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
     printf "\nPATH=\"~/.composer/vendor/bin:\$PATH\"\n" | tee -a ~/.bashrc
     
-# install prestissimo
-# RUN composer global require "hirak/prestissimo"
-
 # install laravel envoy
 RUN composer global require "laravel/envoy"
 
 #install laravel installer
 RUN composer global require "laravel/installer"
-
-# install nodejs
-RUN apt-get install -y nodejs
-
-# install gulp
-RUN /usr/bin/npm install -g gulp
-
-# install bower
-RUN /usr/bin/npm install -g bower
-
-# install redis 
-RUN apt-get install -y redis-server
-
-# install blackfire
-RUN apt-get install -y blackfire-agent blackfire-php
 
 # install beanstalkd
 RUN apt-get install -y --force-yes beanstalkd && \
@@ -146,7 +107,7 @@ RUN apt-get remove --purge -y software-properties-common && \
     rm -rf /usr/share/man/??_*
 
 # expose ports
-EXPOSE 80 443 3306 6379
+EXPOSE 80 443
 
 # set container entrypoints
 ENTRYPOINT ["/bin/bash","-c"]
